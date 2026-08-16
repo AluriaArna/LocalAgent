@@ -1,0 +1,92 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="AgentUi.MainWindow"
+        Title="Local Agent" Width="1200" Height="700">
+    <Grid ColumnDefinitions="350,*">
+        <Border Grid.Column="0" BorderBrush="Gray" BorderThickness="0,0,1,0">
+            <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Margin="10" Spacing="10">
+                    <TextBlock Text="⚙ Настройки" FontWeight="Bold" FontSize="16"/>
+
+                    <StackPanel Spacing="5">
+                        <TextBlock Text="Профиль:"/>
+                        <Grid ColumnDefinitions="*,Auto,Auto">
+                            <ComboBox x:Name="ProfileBox" Grid.Column="0" SelectionChanged="OnProfileChanged"/>
+                            <Button Grid.Column="1" Content="+" Click="OnAddProfile" Margin="5,0,0,0" MinWidth="30"/>
+                            <Button Grid.Column="2" Content="✕" Click="OnDeleteProfile" Margin="5,0,0,0" MinWidth="30"/>
+                        </Grid>
+                    </StackPanel>
+
+                    <StackPanel Spacing="5">
+                        <TextBlock Text="Пользователь системы:"/>
+                        <Grid ColumnDefinitions="*,Auto">
+                            <ComboBox x:Name="UserBox" Grid.Column="0" SelectionChanged="OnUserChanged"/>
+                            <Button Grid.Column="1" Content="✓" Click="OnTestUser" MinWidth="30" Margin="5,0,0,0"/>
+                        </Grid>
+                    </StackPanel>
+                    <StackPanel Spacing="5">  
+                        <TextBlock Text="Папки агента:"/>
+                            <Grid ColumnDefinitions="*,Auto">
+                            <TextBox x:Name="GrantPathBox" Grid.Column="0" PlaceholderText="/путь/к/папке"/>
+                            <Button Grid.Column="1" Content="+" Click="OnGrantFolder" MinWidth="30" Margin="5,0,0,0"/>
+                        </Grid>
+                        <ListBox x:Name="AllowedFoldersBox" MaxHeight="120"/>
+                        <Grid ColumnDefinitions="*,*">
+                            <Button Grid.Column="0" Content="… Выбрать папку" Click="OnPickGrantFolder" Margin="0,0,5,0"/>
+                            <Button Grid.Column="1" Content="− Отозвать" Click="OnRevokeFolder" Margin="5,0,0,0"/>
+                        </Grid>
+                    </StackPanel>
+
+                    <StackPanel Spacing="5">
+                        <TextBox x:Name="UrlBox" PlaceholderText="URL, например http://localhost:11434"/>
+                        <Grid ColumnDefinitions="*,*">
+                            <TextBox x:Name="ModelBox" Grid.Column="0" PlaceholderText="Модель" Margin="0,0,5,0"/>
+                            <TextBox x:Name="KeyBox" Grid.Column="1" PlaceholderText="API-ключ" Margin="5,0,0,0"/>
+                        </Grid>
+                    </StackPanel>
+
+                    <StackPanel Spacing="5">
+                        <TextBlock Text="Папка дневника:"/>
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBox x:Name="DiaryPathBox" Grid.Column="0"/>
+                            <Button Grid.Column="1" Content="…" Click="OnPickDiaryPath" MinWidth="30" Margin="5,0,0,0"/>
+                        </Grid>
+                        <TextBlock Text="Папка памяти:"/>
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBox x:Name="MemoryPathBox" Grid.Column="0"/>
+                            <Button Grid.Column="1" Content="…" Click="OnPickMemoryPath" MinWidth="30" Margin="5,0,0,0"/>
+                        </Grid>
+                    </StackPanel>
+
+                    <StackPanel Spacing="5">
+                        <TextBlock Text="Контекст (сообщений):"/>
+                        <NumericUpDown x:Name="ContextLimitBox" Minimum="1" Maximum="200" Value="20" ValueChanged="OnContextLimitChanged"/>
+                        <TextBlock Text="Авто-новый дневник (токенов):"/>
+                        <NumericUpDown x:Name="AutoNewDiaryTokensBox" Minimum="1000" Maximum="1000000" Value="50000" ValueChanged="OnAutoNewDiaryTokensChanged"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="5">
+                        <Button x:Name="NewDiaryButton" Content="📓 Новый дневник" Click="OnNewDiary"/>
+                        <Button x:Name="MemoryButton" Content="🧠 Создать память" Click="OnMakeMemory"/>
+                    </StackPanel>
+
+                    <TextBlock x:Name="TokenCounterText" Text="Токенов в дневнике: 0"/>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <DockPanel Grid.Column="1" Margin="10">
+            <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Margin="0,10,0,0">
+                <TextBox x:Name="InputBox" Grid.Column="0" Margin="0,0,10,0"
+                         PlaceholderText="Введите сообщение... (Enter — отправить, Shift+Enter — перенос)"
+                         AcceptsReturn="True"/>
+                <Button x:Name="SendButton" Grid.Column="1" Content="Отправить" Click="OnSendClick"/>
+            </Grid>
+
+            <TextBox x:Name="LogBox"
+                     IsReadOnly="True"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"/>
+        </DockPanel>
+    </Grid>
+</Window>
