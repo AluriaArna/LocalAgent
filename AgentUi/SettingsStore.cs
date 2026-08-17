@@ -31,6 +31,16 @@ public class SettingsData
     public string MemoryPath { get; set; } = "";
     public int ContextLimit { get; set; } = 20;
     public int AutoNewDiaryTokens { get; set; } = 50000;
+    public string PromptFirstPath { get; set; } = "";
+    public string PromptSystemPath { get; set; } = "";
+    public string PromptCharacterPath { get; set; } = "";
+    public string PromptAppearancePath { get; set; } = "";
+    public string PromptDiarySavePath { get; set; } = "";
+    public string RagPath { get; set; } = "";
+    public string EmbedModel { get; set; } = "qwen3-embedding:8b";
+    public int RagChunkSize { get; set; } = 1000;
+    public int RagTopK { get; set; } = 5;
+    public double RagThreshold { get; set; } = 0.35;
     public Dictionary<string, List<string>> AllowedFolders { get; set; } = new();
 }
 

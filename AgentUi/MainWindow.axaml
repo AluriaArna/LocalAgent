@@ -155,6 +155,68 @@
                                 <NumericUpDown x:Name="SeedBox" Minimum="-1" Maximum="2147483647" Increment="1"/>
                             </StackPanel>
                         </TabItem>
+                                                <!-- Вкладка 3: Промпты -->
+                        <TabItem Header="Промпты">
+                            <StackPanel Margin="5">
+                                <TextBlock Text="Файлы уходят в LLM только если выбраны. Пусто — запрос идёт как обычно."
+                                           FontSize="11" Foreground="Gray" Margin="0,0,0,10" TextWrapping="Wrap"/>
+
+                                <TextBlock Text="Первое сообщение (до инструкций):" Margin="0,0,0,5"/>
+                                <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+                                    <TextBox Grid.Column="0" x:Name="PromptFirstBox" PlaceholderText="файл не выбран"/>
+                                    <Button Grid.Column="1" Content="..." Width="34" Margin="5,0,0,0" Click="OnPickPromptFirst"/>
+                                </Grid>
+
+                                <TextBlock Text="Системный промпт:" Margin="0,0,0,5"/>
+                                <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+                                    <TextBox Grid.Column="0" x:Name="PromptSystemBox" PlaceholderText="файл не выбран"/>
+                                    <Button Grid.Column="1" Content="..." Width="34" Margin="5,0,0,0" Click="OnPickPromptSystem"/>
+                                </Grid>
+
+                                <TextBlock Text="Характер персонажа:" Margin="0,0,0,5"/>
+                                <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+                                    <TextBox Grid.Column="0" x:Name="PromptCharacterBox" PlaceholderText="файл не выбран"/>
+                                    <Button Grid.Column="1" Content="..." Width="34" Margin="5,0,0,0" Click="OnPickPromptCharacter"/>
+                                </Grid>
+
+                                <TextBlock Text="Описание персонажа:" Margin="0,0,0,5"/>
+                                <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+                                    <TextBox Grid.Column="0" x:Name="PromptAppearanceBox" PlaceholderText="файл не выбран"/>
+                                    <Button Grid.Column="1" Content="..." Width="34" Margin="5,0,0,0" Click="OnPickPromptAppearance"/>
+                                </Grid>
+
+                                <TextBlock Text="Как сохранять дневник:" Margin="0,0,0,5"/>
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBox Grid.Column="0" x:Name="PromptDiarySaveBox" PlaceholderText="файл не выбран"/>
+                                    <Button Grid.Column="1" Content="..." Width="34" Margin="5,0,0,0" Click="OnPickPromptDiarySave"/>
+                                </Grid>
+                            </StackPanel>
+                        </TabItem>
+                                                <!-- Вкладка 4: RAG -->
+                        <TabItem Header="RAG">
+                            <StackPanel Margin="5">
+                                <TextBlock Text="Папка базы знаний:" Margin="0,0,0,5"/>
+                                <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+                                    <TextBox Grid.Column="0" x:Name="RagPathBox" PlaceholderText="папка с .md / .txt"/>
+                                    <Button Grid.Column="1" Content="..." Width="34" Margin="5,0,0,0" Click="OnPickRagPath"/>
+                                </Grid>
+
+                                <TextBlock Text="Embedding-модель:" Margin="0,0,0,5"/>
+                                <TextBox x:Name="EmbedModelBox" PlaceholderText="qwen3-embedding:0.6b" Margin="0,0,0,10"/>
+
+                                <TextBlock Text="Размер фрагмента (символов):" Margin="0,0,0,5"/>
+                                <NumericUpDown x:Name="RagChunkSizeBox" Minimum="200" Maximum="8000" Increment="100" Margin="0,0,0,10"/>
+
+                                <TextBlock Text="Топ-K фрагментов:" Margin="0,0,0,5"/>
+                                <NumericUpDown x:Name="RagTopKBox" Minimum="1" Maximum="20" Increment="1" Margin="0,0,0,10"/>
+
+                                <TextBlock Text="Порог релевантности (0–1):" Margin="0,0,0,5"/>
+                                <NumericUpDown x:Name="RagThresholdBox" Minimum="0" Maximum="1" Increment="0.05" FormatString="0.00" Margin="0,0,0,10"/>
+
+                                <Button x:Name="BuildRagButton" Content="🔨 Построить индекс" Click="OnBuildRagIndex" Margin="0,0,0,10"/>
+                                <TextBlock x:Name="RagStatusText" TextWrapping="Wrap" Foreground="Gray"/>
+                            </StackPanel>
+                        </TabItem>
 
                     </TabControl>
                 </StackPanel>

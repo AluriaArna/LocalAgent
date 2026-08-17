@@ -4,6 +4,7 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using System.Text;
+using System.Text.Json;
 
 namespace AgentUi;
 
@@ -19,6 +20,8 @@ public partial class MainWindow : Window
 
     private LlmSettings _currentLlm = new();
     private bool _suppressLlm;
+
+    private RagIndex? _ragIndex;
 
     public MainWindow()
     {
@@ -39,10 +42,23 @@ public partial class MainWindow : Window
         ContextLimitBox.Value = _data.ContextLimit;
         AutoNewDiaryTokensBox.Value = _data.AutoNewDiaryTokens;
 
+        PromptFirstBox.Text = _data.PromptFirstPath;
+        PromptSystemBox.Text = _data.PromptSystemPath;
+        PromptCharacterBox.Text = _data.PromptCharacterPath;
+        PromptAppearanceBox.Text = _data.PromptAppearancePath;
+        PromptDiarySaveBox.Text = _data.PromptDiarySavePath;
+
+        RagPathBox.Text = _data.RagPath;
+        EmbedModelBox.Text = _data.EmbedModel;
+        RagChunkSizeBox.Value = _data.RagChunkSize;
+        RagTopKBox.Value = _data.RagTopK;
+        RagThresholdBox.Value = (decimal)_data.RagThreshold;
+
         RefreshProfileList();
         FillFields(_current);
         RefreshLlmProfileList();
         FillLlmFields(_currentLlm);
+        LoadRagIndex();
 
         CleanupEmptyDiaries();
         LoadDiary();
@@ -56,19 +72,7 @@ public partial class MainWindow : Window
     private (string url, string model, string? key) GetEndpoint()
         => (UrlBox.Text ?? "", ModelBox.Text ?? "", KeyBox.Text);
 
-    private async Task<string?> PickFolderAsync(string title)
-    {
-        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
-        {
-            Title = title,
-            AllowMultiple = false
-        });
-        return folders.Count > 0
-            ? folders[0].TryGetLocalPath() ?? folders[0].Path.ToString()
-            : null;
-    }
-
-        private LlmParams CurrentLlmParams() => new()
+    private LlmParams CurrentLlmParams() => new()
     {
         Temperature = _currentLlm.Temperature,
         TopP = _currentLlm.TopP,
@@ -152,27 +156,37 @@ public partial class MainWindow : Window
 
     private List<ChatMessage> BuildContext()
     {
-        var context = _diary.Messages
-            .Skip(Math.Max(0, _diary.Messages.Count - _data.ContextLimit))
-            .ToList();
+        var context = new List<ChatMessage>();
 
-        var insertAt = 0;
+        var first = LoadPrompt(PromptFirstBox.Text);
+        if (first.Length > 0)
+            context.Add(new ChatMessage { Role = "system", Content = first });
+
+        var sys = LoadPrompt(PromptSystemBox.Text);
+        if (sys.Length > 0)
+            context.Add(new ChatMessage { Role = "system", Content = sys });
+
+        var character = LoadPrompt(PromptCharacterBox.Text);
+        if (character.Length > 0)
+            context.Add(new ChatMessage { Role = "system", Content = character });
+
+        var appearance = LoadPrompt(PromptAppearanceBox.Text);
+        if (appearance.Length > 0)
+            context.Add(new ChatMessage { Role = "system", Content = appearance });
+
         if (!string.IsNullOrWhiteSpace(_memory))
-        {
-            context.Insert(0, new ChatMessage
+            context.Add(new ChatMessage
             {
                 Role = "system",
                 Content = "Твоя рабочая память. Всегда учитывай эти пункты при ответах:\n" + _memory
             });
-            insertAt = 1;
-        }
 
         if (!string.IsNullOrWhiteSpace(_data.DiaryPath))
         {
             var reflections = ReflectionStore.LoadAll(_data.DiaryPath);
             if (reflections.Count > 0)
             {
-                context.Insert(insertAt, new ChatMessage
+                context.Add(new ChatMessage
                 {
                     Role = "system",
                     Content = "Контекст из предыдущих дневников (рефлексии):\n\n" + string.Join(
@@ -181,6 +195,9 @@ public partial class MainWindow : Window
                 });
             }
         }
+
+        context.AddRange(_diary.Messages
+            .Skip(Math.Max(0, _diary.Messages.Count - _data.ContextLimit)));
 
         return context;
     }
@@ -376,6 +393,192 @@ public partial class MainWindow : Window
         RenderLog();
     }
 
+    private async Task<string?> PickFolderAsync(string title)
+    {
+        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = title,
+            AllowMultiple = false
+        });
+        return folders.Count > 0
+            ? folders[0].TryGetLocalPath() ?? folders[0].Path.ToString()
+            : null;
+    }
+
+    // ===== Промпты =====
+
+    private static string LoadPrompt(string? path) =>
+        !string.IsNullOrWhiteSpace(path) && File.Exists(path) ? File.ReadAllText(path).Trim() : "";
+
+    private async Task<string?> PickFileAsync(string title)
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = title,
+            AllowMultiple = false
+        });
+        return files.Count > 0
+            ? files[0].TryGetLocalPath() ?? files[0].Path.ToString()
+            : null;
+    }
+
+    private async void OnPickPromptFirst(object? sender, RoutedEventArgs e)
+    {
+        var p = await PickFileAsync("Файл первого сообщения");
+        if (p != null) PromptFirstBox.Text = p;
+    }
+
+    private async void OnPickPromptSystem(object? sender, RoutedEventArgs e)
+    {
+        var p = await PickFileAsync("Файл системного промпта");
+        if (p != null) PromptSystemBox.Text = p;
+    }
+
+    private async void OnPickPromptCharacter(object? sender, RoutedEventArgs e)
+    {
+        var p = await PickFileAsync("Файл характера персонажа");
+        if (p != null) PromptCharacterBox.Text = p;
+    }
+
+    private async void OnPickPromptAppearance(object? sender, RoutedEventArgs e)
+    {
+        var p = await PickFileAsync("Файл описания персонажа");
+        if (p != null) PromptAppearanceBox.Text = p;
+    }
+
+    private async void OnPickPromptDiarySave(object? sender, RoutedEventArgs e)
+    {
+        var p = await PickFileAsync("Файл инструкций по дневнику");
+        if (p != null) PromptDiarySaveBox.Text = p;
+    }
+
+    // ===== RAG =====
+
+    private void LoadRagIndex()
+    {
+        _ragIndex = RagStore.Load();
+        RagStatusText.Text = _ragIndex == null
+            ? "Индекс не построен."
+            : $"Индекс: {_ragIndex.AllChunks().Count} фрагментов из {_ragIndex.Files.Count} файлов, модель {_ragIndex.EmbedModel}.";
+    }
+
+    private async void OnPickRagPath(object? sender, RoutedEventArgs e)
+    {
+        var path = await PickFolderAsync("Выберите папку базы знаний");
+        if (path == null) return;
+        RagPathBox.Text = path;
+        _data.RagPath = path;
+    }
+
+    private async void OnBuildRagIndex(object? sender, RoutedEventArgs e)
+    {
+        var embedModel = EmbedModelBox.Text?.Trim() ?? "";
+        if (string.IsNullOrWhiteSpace(embedModel)) return;
+
+        var sources = BuildRagSources();
+        if (sources.Count == 0)
+        {
+            RagStatusText.Text = "⚠ Не задано ни одной папки-источника (RAG / дневник / память).";
+            return;
+        }
+
+        var (url, _, key) = GetEndpoint();
+        if (string.IsNullOrWhiteSpace(url)) return;
+
+        BuildRagButton.IsEnabled = false;
+        RagStatusText.Text = "Строю индекс...";
+        try
+        {
+            await RagStore.BuildAsync(_client, url, key, sources, embedModel,
+                (int)(RagChunkSizeBox.Value ?? 1000), _ragIndex,
+                log => Dispatcher.UIThread.Post(() => RagStatusText.Text = log.TrimEnd()));
+            _data.RagPath = RagPathBox.Text ?? "";
+            _data.EmbedModel = embedModel;
+            LoadRagIndex();
+        }
+        catch (Exception ex)
+        {
+            RagStatusText.Text = $"✕ Ошибка построения: {ex.Message}";
+        }
+        finally
+        {
+            BuildRagButton.IsEnabled = true;
+        }
+    }
+
+    private List<(string path, string source)> BuildRagSources()
+    {
+        var sources = new List<(string path, string source)>();
+        if (!string.IsNullOrWhiteSpace(_data.RagPath) && Directory.Exists(_data.RagPath))
+            sources.Add((_data.RagPath, "база знаний"));
+        if (!string.IsNullOrWhiteSpace(_data.DiaryPath) && Directory.Exists(_data.DiaryPath))
+            sources.Add((_data.DiaryPath, "дневник"));
+        if (!string.IsNullOrWhiteSpace(_data.MemoryPath) && Directory.Exists(_data.MemoryPath))
+            sources.Add((_data.MemoryPath, "память"));
+        return sources;
+    }
+
+    /// <summary>Тихая пересборка индекса, если он уже построен (после нового дневника/памяти).</summary>
+    private async void RebuildRagIfBuiltAsync()
+    {
+        if (_ragIndex == null) return;
+        var (url, _, key) = GetEndpoint();
+        if (string.IsNullOrWhiteSpace(url)) return;
+        try
+        {
+            await RagStore.BuildAsync(_client, url, key, BuildRagSources(),
+                _ragIndex.EmbedModel, _ragIndex.ChunkSize, _ragIndex);
+            LoadRagIndex();
+        }
+        catch { }
+    }
+
+    // ===== Инструменты (агентный цикл) =====
+
+    private async Task<string> ExecuteToolAsync(string url, string? key, ToolCall call)
+    {
+        AppendToolCall($"🛠 #{call.Name}({call.ArgumentsJson})\n");
+
+        string result;
+        try
+        {
+            if (_ragIndex == null)
+            {
+                result = "База знаний не загружена.";
+            }
+            else
+            {
+                using var doc = JsonDocument.Parse(call.ArgumentsJson);
+                var args = doc.RootElement;
+
+                if (call.Name == "ask")
+                {
+                    var question = args.TryGetProperty("question", out var q) ? q.GetString() ?? "" : "";
+                    result = await RagStore.ProbeAsync(_client, url, key, _ragIndex, question, _data.RagThreshold);
+                }
+                else if (call.Name == "query")
+                {
+                    var query = args.TryGetProperty("query", out var q) ? q.GetString() ?? "" : "";
+                    var topK = args.TryGetProperty("top_k", out var tk) && tk.ValueKind == JsonValueKind.Number
+                        ? tk.GetInt32()
+                        : _data.RagTopK;
+                    result = await RagStore.QueryAsync(_client, url, key, _ragIndex, query, topK, _data.RagThreshold);
+                }
+                else
+                {
+                    result = $"Неизвестный инструмент: {call.Name}";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            result = $"Ошибка инструмента: {ex.Message}";
+        }
+
+        AppendToolCall($"→ {result}\n\n");
+        return result;
+    }
+
     // ===== Кнопки дневника и памяти =====
 
     private async void OnNewDiary(object? sender, RoutedEventArgs e)
@@ -392,14 +595,19 @@ public partial class MainWindow : Window
                 var historyText = string.Join("\n\n",
                     _diary.Messages.Select(m => $"{(m.Role == "user" ? "Ты" : "Агент")}: {m.Content}"));
 
+                var diaryInstructions = LoadPrompt(PromptDiarySaveBox.Text);
+
                 var prompt =
                     "Ты — модуль рефлексии агента. Проанализируй следующий диалог и создай " +
                     "сжатое резюме объёмом 400-600 слов на русском языке.\n\n" +
                     "Требования:\n" +
                     "- Сохрани ключевые факты, решения, выводы\n" +
                     "- Убери воду, повторения, нерелевантные детали\n" +
-                    "- Оформи структурированно, чтобы агент мог быстро найти нужное\n\n" +
-                    historyText;
+                    "- Оформи структурированно, чтобы агент мог быстро найти нужное\n" +
+                    (diaryInstructions.Length > 0
+                        ? "\nДополнительные инструкции пользователя по ведению дневника:\n" + diaryInstructions + "\n"
+                        : "") +
+                    "\n" + historyText;
 
                 var reflection = (await _client.AskOnceAsync(url, model, key, prompt, CurrentLlmParams())).Trim();
 
@@ -424,6 +632,7 @@ public partial class MainWindow : Window
         _diary = new Diary();
         _diaryFile = null;
         RenderLog();
+        RebuildRagIfBuiltAsync();
     }
 
     private async void OnMakeMemory(object? sender, RoutedEventArgs e)
@@ -454,6 +663,7 @@ public partial class MainWindow : Window
             if (string.IsNullOrWhiteSpace(_data.MemoryPath))
                 AppendLog("⚠ Путь для памяти не задан — сохранено только до выхода\n");
             RenderLog();
+            RebuildRagIfBuiltAsync();
         }
         catch (Exception ex)
         {
@@ -475,13 +685,23 @@ public partial class MainWindow : Window
         _data.ActiveLlmName = _currentLlm.Name;
         _data.DiaryPath = DiaryPathBox.Text ?? "";
         _data.MemoryPath = MemoryPathBox.Text ?? "";
+        _data.PromptFirstPath = PromptFirstBox.Text ?? "";
+        _data.PromptSystemPath = PromptSystemBox.Text ?? "";
+        _data.PromptCharacterPath = PromptCharacterBox.Text ?? "";
+        _data.PromptAppearancePath = PromptAppearanceBox.Text ?? "";
+        _data.PromptDiarySavePath = PromptDiarySaveBox.Text ?? "";
+        _data.RagPath = RagPathBox.Text ?? "";
+        _data.EmbedModel = EmbedModelBox.Text ?? "";
+        _data.RagChunkSize = (int)(RagChunkSizeBox.Value ?? 1000);
+        _data.RagTopK = (int)(RagTopKBox.Value ?? 5);
+        _data.RagThreshold = (double)(RagThresholdBox.Value ?? 0.35m);
         SettingsStore.Save(_data);
         base.OnClosed(e);
     }
 
-    // ===== Отправка сообщения =====
+    // ===== Отправка сообщения (агентный цикл) =====
 
-       private async void OnSendClick(object? sender, RoutedEventArgs e)
+    private async void OnSendClick(object? sender, RoutedEventArgs e)
     {
         var message = InputBox.Text ?? "";
         if (string.IsNullOrWhiteSpace(message)) return;
@@ -531,20 +751,37 @@ public partial class MainWindow : Window
         {
             await Task.Run(async () =>
             {
-                await foreach (var chunk in _client.AskStreamAsync(url, model, key, context, CurrentLlmParams()))
+                var messages = context.ToList();
+                var tools = _ragIndex != null ? RagStore.Tools() : null;
+                const int maxIterations = 5;
+
+                for (int iter = 0; iter < maxIterations; iter++)
                 {
-                    lock (gate)
+                    var outcome = await _client.AskWithToolsAsync(
+                        url, model, key, messages, CurrentLlmParams(), tools,
+                        chunk =>
+                        {
+                            lock (gate)
+                            {
+                                if (chunk.Kind == LlmChunkKind.Thinking)
+                                {
+                                    thinkBuffer.Append(chunk.Text);
+                                }
+                                else
+                                {
+                                    var (contentPart, thinkPart) = splitter.Process(chunk.Text);
+                                    buffer.Append(contentPart);
+                                    if (thinkPart.Length > 0) reasonBuffer.Append(thinkPart);
+                                }
+                            }
+                        });
+
+                    if (outcome.ToolCalls.Count == 0) break;
+
+                    foreach (var call in outcome.ToolCalls)
                     {
-                        if (chunk.Kind == LlmChunkKind.Thinking)
-                        {
-                            thinkBuffer.Append(chunk.Text);
-                        }
-                        else
-                        {
-                            var (contentPart, thinkPart) = splitter.Process(chunk.Text);
-                            buffer.Append(contentPart);
-                            if (thinkPart.Length > 0) reasonBuffer.Append(thinkPart);
-                        }
+                        var resultText = await ExecuteToolAsync(url, key, call);
+                        messages.Add(new ChatMessage { Role = "tool", Content = resultText });
                     }
                 }
 
