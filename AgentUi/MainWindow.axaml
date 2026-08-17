@@ -1,92 +1,164 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
         x:Class="AgentUi.MainWindow"
-        Title="Local Agent" Width="1200" Height="700">
-    <Grid ColumnDefinitions="350,*">
-        <Border Grid.Column="0" BorderBrush="Gray" BorderThickness="0,0,1,0">
-            <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-                <StackPanel Margin="10" Spacing="10">
-                    <TextBlock Text="⚙ Настройки" FontWeight="Bold" FontSize="16"/>
+        Title="LocalAgent"
+        Width="1280" Height="800">
 
-                    <StackPanel Spacing="5">
-                        <TextBlock Text="Профиль:"/>
-                        <Grid ColumnDefinitions="*,Auto,Auto">
-                            <ComboBox x:Name="ProfileBox" Grid.Column="0" SelectionChanged="OnProfileChanged"/>
-                            <Button Grid.Column="1" Content="+" Click="OnAddProfile" Margin="5,0,0,0" MinWidth="30"/>
-                            <Button Grid.Column="2" Content="✕" Click="OnDeleteProfile" Margin="5,0,0,0" MinWidth="30"/>
-                        </Grid>
-                    </StackPanel>
+    <Grid ColumnDefinitions="320,*,360">
+        <!-- Левая панель: Thinking / Reasoning / Tool calls -->
+        <Grid Grid.Column="0" RowDefinitions="*,*,*" Margin="10,10,0,10">
+            <Grid Grid.Row="0" RowDefinitions="Auto,*" Margin="0,0,10,10">
+                <TextBlock Text="🤔 Thinking" FontWeight="Bold" Margin="0,0,0,5"/>
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                    <TextBox x:Name="ThinkingBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap"/>
+                </ScrollViewer>
+            </Grid>
 
-                    <StackPanel Spacing="5">
-                        <TextBlock Text="Пользователь системы:"/>
-                        <Grid ColumnDefinitions="*,Auto">
-                            <ComboBox x:Name="UserBox" Grid.Column="0" SelectionChanged="OnUserChanged"/>
-                            <Button Grid.Column="1" Content="✓" Click="OnTestUser" MinWidth="30" Margin="5,0,0,0"/>
-                        </Grid>
-                    </StackPanel>
-                    <StackPanel Spacing="5">  
-                        <TextBlock Text="Папки агента:"/>
-                            <Grid ColumnDefinitions="*,Auto">
-                            <TextBox x:Name="GrantPathBox" Grid.Column="0" PlaceholderText="/путь/к/папке"/>
-                            <Button Grid.Column="1" Content="+" Click="OnGrantFolder" MinWidth="30" Margin="5,0,0,0"/>
-                        </Grid>
-                        <ListBox x:Name="AllowedFoldersBox" MaxHeight="120"/>
-                        <Grid ColumnDefinitions="*,*">
-                            <Button Grid.Column="0" Content="… Выбрать папку" Click="OnPickGrantFolder" Margin="0,0,5,0"/>
-                            <Button Grid.Column="1" Content="− Отозвать" Click="OnRevokeFolder" Margin="5,0,0,0"/>
-                        </Grid>
-                    </StackPanel>
+            <Grid Grid.Row="1" RowDefinitions="Auto,*" Margin="0,0,10,10">
+                <TextBlock Text="🧠 Reasoning" FontWeight="Bold" Margin="0,0,0,5"/>
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                    <TextBox x:Name="ReasoningBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap"/>
+                </ScrollViewer>
+            </Grid>
 
-                    <StackPanel Spacing="5">
-                        <TextBox x:Name="UrlBox" PlaceholderText="URL, например http://localhost:11434"/>
-                        <Grid ColumnDefinitions="*,*">
-                            <TextBox x:Name="ModelBox" Grid.Column="0" PlaceholderText="Модель" Margin="0,0,5,0"/>
-                            <TextBox x:Name="KeyBox" Grid.Column="1" PlaceholderText="API-ключ" Margin="5,0,0,0"/>
-                        </Grid>
-                    </StackPanel>
+            <Grid Grid.Row="2" RowDefinitions="Auto,*" Margin="0,0,10,0">
+                <TextBlock Text="🛠 Tool calls" FontWeight="Bold" Margin="0,0,0,5"/>
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                    <TextBox x:Name="ToolCallBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap"/>
+                </ScrollViewer>
+            </Grid>
+        </Grid>
 
-                    <StackPanel Spacing="5">
-                        <TextBlock Text="Папка дневника:"/>
-                        <Grid ColumnDefinitions="*,Auto">
-                            <TextBox x:Name="DiaryPathBox" Grid.Column="0"/>
-                            <Button Grid.Column="1" Content="…" Click="OnPickDiaryPath" MinWidth="30" Margin="5,0,0,0"/>
-                        </Grid>
-                        <TextBlock Text="Папка памяти:"/>
-                        <Grid ColumnDefinitions="*,Auto">
-                            <TextBox x:Name="MemoryPathBox" Grid.Column="0"/>
-                            <Button Grid.Column="1" Content="…" Click="OnPickMemoryPath" MinWidth="30" Margin="5,0,0,0"/>
-                        </Grid>
-                    </StackPanel>
+        <!-- Левая часть: диалог -->
+        <Grid Grid.Column="1" RowDefinitions="*,Auto" Margin="10">
 
-                    <StackPanel Spacing="5">
-                        <TextBlock Text="Контекст (сообщений):"/>
-                        <NumericUpDown x:Name="ContextLimitBox" Minimum="1" Maximum="200" Value="20" ValueChanged="OnContextLimitChanged"/>
-                        <TextBlock Text="Авто-новый дневник (токенов):"/>
-                        <NumericUpDown x:Name="AutoNewDiaryTokensBox" Minimum="1000" Maximum="1000000" Value="50000" ValueChanged="OnAutoNewDiaryTokensChanged"/>
-                    </StackPanel>
+            <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+                <TextBox x:Name="LogBox"
+                         IsReadOnly="True"
+                         AcceptsReturn="True"
+                         TextWrapping="Wrap"/>
+            </ScrollViewer>
 
-                    <StackPanel Spacing="5">
-                        <Button x:Name="NewDiaryButton" Content="📓 Новый дневник" Click="OnNewDiary"/>
-                        <Button x:Name="MemoryButton" Content="🧠 Создать память" Click="OnMakeMemory"/>
-                    </StackPanel>
+            <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,10,0,0">
+                <TextBox Grid.Column="0"
+                         x:Name="InputBox"
+                         AcceptsReturn="True"
+                         TextWrapping="Wrap"
+                         PlaceholderText="Сообщение…  (Enter — отправить, Shift+Enter — перенос строки)"
+                         MinHeight="70" MaxHeight="180"/>
+                <Button Grid.Column="1"
+                        x:Name="SendButton"
+                        Content="➤ Отправить"
+                        Width="120"
+                        Margin="10,0,0,0"
+                        Click="OnSendClick"/>
+            </Grid>
+        </Grid>
 
-                    <TextBlock x:Name="TokenCounterText" Text="Токенов в дневнике: 0"/>
+        <!-- Правая часть: настройки -->
+        <Border Grid.Column="2" BorderBrush="Gray" BorderThickness="1,0,0,0">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="10">
+
+                    <TextBlock Text="⚙ Настройки" FontWeight="Bold" FontSize="16" Margin="0,0,0,10"/>
+
+                    <TabControl>
+
+                        <!-- Вкладка 1: Системные настройки -->
+                        <TabItem Header="Системные настройки">
+                            <StackPanel Margin="5">
+
+                                <TextBlock Text="Профиль:" Margin="0,5,0,5"/>
+                                <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+                                    <ComboBox Grid.Column="0" x:Name="ProfileBox" SelectionChanged="OnProfileChanged"/>
+                                    <Button Grid.Column="1" Content="+" Width="34" Margin="5,0,0,0" Click="OnAddProfile" ToolTip.Tip="Добавить профиль"/>
+                                    <Button Grid.Column="2" Content="✎" Width="34" Margin="5,0,0,0" Click="OnRenameProfile" ToolTip.Tip="Переименовать профиль"/>
+                                    <Button Grid.Column="3" Content="X" Width="34" Margin="5,0,0,0" Click="OnDeleteProfile" ToolTip.Tip="Удалить профиль"/>
+                                </Grid>
+
+                                <TextBlock Text="Пользователь системы:" Margin="0,10,0,5"/>
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <ComboBox Grid.Column="0" x:Name="UserBox" SelectionChanged="OnUserChanged"/>
+                                    <Button Grid.Column="1" Content="✔" Width="34" Margin="5,0,0,0" Click="OnTestUser" ToolTip.Tip="Проверить (whoami)"/>
+                                </Grid>
+
+                                <TextBlock Text="Папки агента:" Margin="0,10,0,5"/>
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBox Grid.Column="0" x:Name="GrantPathBox" PlaceholderText="/путь/к/папке"/>
+                                    <Button Grid.Column="1" Content="+" Width="34" Margin="5,0,0,0" Click="OnGrantFolder" ToolTip.Tip="Выдать доступ"/>
+                                </Grid>
+                                <ListBox x:Name="AllowedFoldersBox" Margin="0,5,0,5" MaxHeight="120"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
+                                    <Button Content="... Выбрать папку" Click="OnPickGrantFolder"/>
+                                    <Button Content="- Отозвать" Margin="5,0,0,0" Click="OnRevokeFolder"/>
+                                </StackPanel>
+
+                                <TextBox x:Name="UrlBox" PlaceholderText="http://localhost:11434" Margin="0,5,0,5"/>
+                                <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,5">
+                                    <TextBox Grid.Column="0" x:Name="ModelBox" PlaceholderText="модель"/>
+                                    <TextBox Grid.Column="1" x:Name="KeyBox" PlaceholderText="API-ключ" Width="130" Margin="5,0,0,0"/>
+                                </Grid>
+
+                                <TextBlock Text="Папка дневника:" Margin="0,10,0,5"/>
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBox Grid.Column="0" x:Name="DiaryPathBox"/>
+                                    <Button Grid.Column="1" Content="..." Width="34" Margin="5,0,0,0" Click="OnPickDiaryPath"/>
+                                </Grid>
+
+                                <TextBlock Text="Папка памяти:" Margin="0,10,0,5"/>
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBox Grid.Column="0" x:Name="MemoryPathBox"/>
+                                    <Button Grid.Column="1" Content="..." Width="34" Margin="5,0,0,0" Click="OnPickMemoryPath"/>
+                                </Grid>
+
+                                <TextBlock Text="Контекст (сообщений):" Margin="0,10,0,5"/>
+                                <NumericUpDown x:Name="ContextLimitBox" ValueChanged="OnContextLimitChanged"/>
+
+                                <TextBlock Text="Авто-новый дневник (токенов):" Margin="0,10,0,5"/>
+                                <NumericUpDown x:Name="AutoNewDiaryTokensBox" ValueChanged="OnAutoNewDiaryTokensChanged"/>
+
+                                <Button x:Name="NewDiaryButton" Content="🗒 Новый дневник" Margin="0,10,0,5" Click="OnNewDiary"/>
+                                <Button x:Name="MemoryButton" Content="🧠 Создать память" Click="OnMakeMemory"/>
+
+                                <TextBlock x:Name="TokenCounterText" Margin="0,10,0,0"/>
+                            </StackPanel>
+                        </TabItem>
+
+                        <!-- Вкладка 2: Настройки LLM -->
+                        <TabItem Header="Настройки LLM">
+                            <StackPanel Margin="5">
+
+                                <TextBlock Text="Профиль LLM:" Margin="0,5,0,5"/>
+                                <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+                                    <ComboBox Grid.Column="0" x:Name="LlmProfileBox" SelectionChanged="OnLlmProfileChanged"/>
+                                    <Button Grid.Column="1" Content="+" Width="34" Margin="5,0,0,0" Click="OnAddLlmProfile" ToolTip.Tip="Добавить профиль"/>
+                                    <Button Grid.Column="2" Content="✎" Width="34" Margin="5,0,0,0" Click="OnRenameLlmProfile" ToolTip.Tip="Переименовать профиль"/>
+                                    <Button Grid.Column="3" Content="X" Width="34" Margin="5,0,0,0" Click="OnDeleteLlmProfile" ToolTip.Tip="Удалить профиль"/>
+                                </Grid>
+
+                                <TextBlock Text="Температура (0–2):" Margin="0,10,0,5"/>
+                                <NumericUpDown x:Name="TemperatureBox" Minimum="0" Maximum="2" Increment="0.1" FormatString="0.0"/>
+
+                                <TextBlock Text="Top P (0–1):" Margin="0,10,0,5"/>
+                                <NumericUpDown x:Name="TopPBox" Minimum="0" Maximum="1" Increment="0.05" FormatString="0.00"/>
+
+                                <TextBlock Text="Штраф повторов (1–2):" Margin="0,10,0,5"/>
+                                <NumericUpDown x:Name="RepeatPenaltyBox" Minimum="1" Maximum="2" Increment="0.05" FormatString="0.00"/>
+
+                                <TextBlock Text="Макс. токенов (0 = без лимита):" Margin="0,10,0,5"/>
+                                <NumericUpDown x:Name="MaxTokensBox" Minimum="0" Maximum="131072" Increment="256"/>
+
+                                <TextBlock Text="Seed (-1 = случайно):" Margin="0,10,0,5"/>
+                                <NumericUpDown x:Name="SeedBox" Minimum="-1" Maximum="2147483647" Increment="1"/>
+                            </StackPanel>
+                        </TabItem>
+
+                    </TabControl>
                 </StackPanel>
             </ScrollViewer>
         </Border>
-
-        <DockPanel Grid.Column="1" Margin="10">
-            <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Margin="0,10,0,0">
-                <TextBox x:Name="InputBox" Grid.Column="0" Margin="0,0,10,0"
-                         PlaceholderText="Введите сообщение... (Enter — отправить, Shift+Enter — перенос)"
-                         AcceptsReturn="True"/>
-                <Button x:Name="SendButton" Grid.Column="1" Content="Отправить" Click="OnSendClick"/>
-            </Grid>
-
-            <TextBox x:Name="LogBox"
-                     IsReadOnly="True"
-                     AcceptsReturn="True"
-                     TextWrapping="Wrap"/>
-        </DockPanel>
     </Grid>
 </Window>

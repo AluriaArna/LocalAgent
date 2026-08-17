@@ -17,6 +17,9 @@ public partial class MainWindow : Window
     private string _memory = "";
     private bool _suppress;
 
+    private LlmSettings _currentLlm = new();
+    private bool _suppressLlm;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -27,6 +30,10 @@ public partial class MainWindow : Window
             _data.Profiles.Add(new AppSettings { Name = "Профиль 1" });
         _current = _data.Profiles.FirstOrDefault(p => p.Name == _data.ActiveName) ?? _data.Profiles[0];
 
+        if (_data.LlmProfiles.Count == 0)
+            _data.LlmProfiles.Add(new LlmSettings { Name = "Профиль 1" });
+        _currentLlm = _data.LlmProfiles.FirstOrDefault(p => p.Name == _data.ActiveLlmName) ?? _data.LlmProfiles[0];
+
         DiaryPathBox.Text = _data.DiaryPath;
         MemoryPathBox.Text = _data.MemoryPath;
         ContextLimitBox.Value = _data.ContextLimit;
@@ -34,6 +41,8 @@ public partial class MainWindow : Window
 
         RefreshProfileList();
         FillFields(_current);
+        RefreshLlmProfileList();
+        FillLlmFields(_currentLlm);
 
         CleanupEmptyDiaries();
         LoadDiary();
@@ -58,6 +67,15 @@ public partial class MainWindow : Window
             ? folders[0].TryGetLocalPath() ?? folders[0].Path.ToString()
             : null;
     }
+
+        private LlmParams CurrentLlmParams() => new()
+    {
+        Temperature = _currentLlm.Temperature,
+        TopP = _currentLlm.TopP,
+        RepeatPenalty = _currentLlm.RepeatPenalty,
+        MaxTokens = _currentLlm.MaxTokens,
+        Seed = _currentLlm.Seed
+    };
 
     private void AppendLog(string text) => LogBox.Text += text;
 
@@ -187,7 +205,7 @@ public partial class MainWindow : Window
         UpdateTokenCounter();
     }
 
-    // ===== Профили =====
+    // ===== Профили подключения =====
 
     private void RefreshProfileList()
     {
@@ -244,6 +262,91 @@ public partial class MainWindow : Window
         FillFields(_current);
     }
 
+    private async void OnRenameProfile(object? sender, RoutedEventArgs e)
+    {
+        var dialog = new InputDialog("Переименовать профиль", "Новое имя:", _current.Name);
+        var result = await dialog.ShowDialog<string?>(this);
+        if (string.IsNullOrWhiteSpace(result)) return;
+        if (_data.Profiles.Any(p => p.Name == result && p != _current)) return;
+
+        SaveFields();
+        _current.Name = result;
+        RefreshProfileList();
+    }
+
+    // ===== Профили LLM =====
+
+    private void RefreshLlmProfileList()
+    {
+        _suppressLlm = true;
+        LlmProfileBox.Items.Clear();
+        foreach (var p in _data.LlmProfiles)
+            LlmProfileBox.Items.Add(p.Name);
+        LlmProfileBox.SelectedItem = _currentLlm.Name;
+        _suppressLlm = false;
+    }
+
+    private void FillLlmFields(LlmSettings s)
+    {
+        TemperatureBox.Value = (decimal)s.Temperature;
+        TopPBox.Value = (decimal)s.TopP;
+        RepeatPenaltyBox.Value = (decimal)s.RepeatPenalty;
+        MaxTokensBox.Value = s.MaxTokens;
+        SeedBox.Value = s.Seed;
+    }
+
+    private void SaveLlmFields()
+    {
+        _currentLlm.Temperature = (double)(TemperatureBox.Value ?? 0.8m);
+        _currentLlm.TopP = (double)(TopPBox.Value ?? 0.9m);
+        _currentLlm.RepeatPenalty = (double)(RepeatPenaltyBox.Value ?? 1.1m);
+        _currentLlm.MaxTokens = (int)(MaxTokensBox.Value ?? 0);
+        _currentLlm.Seed = (int)(SeedBox.Value ?? -1);
+    }
+
+    private void OnLlmProfileChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressLlm) return;
+        var name = LlmProfileBox.SelectedItem as string;
+        if (name == null || name == _currentLlm.Name) return;
+        SaveLlmFields();
+        _currentLlm = _data.LlmProfiles.First(p => p.Name == name);
+        FillLlmFields(_currentLlm);
+    }
+
+    private void OnAddLlmProfile(object? sender, RoutedEventArgs e)
+    {
+        SaveLlmFields();
+        var name = $"Профиль {_data.LlmProfiles.Count + 1}";
+        while (_data.LlmProfiles.Any(p => p.Name == name)) name += "·";
+        var profile = new LlmSettings { Name = name };
+        _data.LlmProfiles.Add(profile);
+        _currentLlm = profile;
+        RefreshLlmProfileList();
+        FillLlmFields(_currentLlm);
+    }
+
+    private void OnDeleteLlmProfile(object? sender, RoutedEventArgs e)
+    {
+        if (_data.LlmProfiles.Count <= 1) return;
+        _data.LlmProfiles.Remove(_currentLlm);
+        _currentLlm = _data.LlmProfiles[0];
+        RefreshLlmProfileList();
+        FillLlmFields(_currentLlm);
+    }
+
+    private async void OnRenameLlmProfile(object? sender, RoutedEventArgs e)
+    {
+        var dialog = new InputDialog("Переименовать профиль LLM", "Новое имя:", _currentLlm.Name);
+        var result = await dialog.ShowDialog<string?>(this);
+        if (string.IsNullOrWhiteSpace(result)) return;
+        if (_data.LlmProfiles.Any(p => p.Name == result && p != _currentLlm)) return;
+
+        SaveLlmFields();
+        _currentLlm.Name = result;
+        RefreshLlmProfileList();
+    }
+
     // ===== Пути =====
 
     private async void OnPickDiaryPath(object? sender, RoutedEventArgs e)
@@ -256,12 +359,12 @@ public partial class MainWindow : Window
         RenderLog();
     }
 
-private async void OnPickGrantFolder(object? sender, RoutedEventArgs e)
-{
-    var path = await PickFolderAsync("Выберите папку для выдачи доступа");
-    if (path != null)
-        GrantPathBox.Text = path;
-}
+    private async void OnPickGrantFolder(object? sender, RoutedEventArgs e)
+    {
+        var path = await PickFolderAsync("Выберите папку для выдачи доступа");
+        if (path != null)
+            GrantPathBox.Text = path;
+    }
 
     private async void OnPickMemoryPath(object? sender, RoutedEventArgs e)
     {
@@ -298,7 +401,7 @@ private async void OnPickGrantFolder(object? sender, RoutedEventArgs e)
                     "- Оформи структурированно, чтобы агент мог быстро найти нужное\n\n" +
                     historyText;
 
-                var reflection = (await _client.AskOnceAsync(url, model, key, prompt)).Trim();
+                var reflection = (await _client.AskOnceAsync(url, model, key, prompt, CurrentLlmParams())).Trim();
 
                 if (reflection.Length < 50)
                     AppendLog($"⚠ Рефлексия пустая или короткая ({reflection.Length} символов), файл не создан\n");
@@ -346,7 +449,7 @@ private async void OnPickGrantFolder(object? sender, RoutedEventArgs e)
                 "Если запоминать нечего — ответь одним словом «пусто».\n\n" +
                 historyText;
 
-            _memory = (await _client.AskOnceAsync(url, model, key, prompt)).Trim();
+            _memory = (await _client.AskOnceAsync(url, model, key, prompt, CurrentLlmParams())).Trim();
             SaveMemory();
             if (string.IsNullOrWhiteSpace(_data.MemoryPath))
                 AppendLog("⚠ Путь для памяти не задан — сохранено только до выхода\n");
@@ -367,7 +470,9 @@ private async void OnPickGrantFolder(object? sender, RoutedEventArgs e)
     protected override void OnClosed(EventArgs e)
     {
         SaveFields();
+        SaveLlmFields();
         _data.ActiveName = _current.Name;
+        _data.ActiveLlmName = _currentLlm.Name;
         _data.DiaryPath = DiaryPathBox.Text ?? "";
         _data.MemoryPath = MemoryPathBox.Text ?? "";
         SettingsStore.Save(_data);
@@ -376,7 +481,7 @@ private async void OnPickGrantFolder(object? sender, RoutedEventArgs e)
 
     // ===== Отправка сообщения =====
 
-    private async void OnSendClick(object? sender, RoutedEventArgs e)
+       private async void OnSendClick(object? sender, RoutedEventArgs e)
     {
         var message = InputBox.Text ?? "";
         if (string.IsNullOrWhiteSpace(message)) return;
@@ -394,19 +499,30 @@ private async void OnPickGrantFolder(object? sender, RoutedEventArgs e)
         RenderLog();
         AppendLog("Агент: ");
 
+        ThinkingBox.Text = "";
+        ReasoningBox.Text = "";
+        ToolCallBox.Text = "";
+
         var buffer = new StringBuilder();
+        var thinkBuffer = new StringBuilder();
+        var reasonBuffer = new StringBuilder();
         var gate = new object();
-        var shown = 0;
+        var shownC = 0;
+        var shownT = 0;
+        var shownR = 0;
+        var splitter = new ThinkTagSplitter();
 
         var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
         timer.Tick += (_, _) =>
         {
-            string snapshot;
-            lock (gate) snapshot = buffer.ToString();
-            if (snapshot.Length > shown)
+            lock (gate)
             {
-                LogBox.Text += snapshot.Substring(shown);
-                shown = snapshot.Length;
+                var c = buffer.ToString();
+                var t = thinkBuffer.ToString();
+                var r = reasonBuffer.ToString();
+                if (c.Length > shownC) { LogBox.Text += c.Substring(shownC); shownC = c.Length; }
+                if (t.Length > shownT) { ThinkingBox.Text += t.Substring(shownT); shownT = t.Length; }
+                if (r.Length > shownR) { ReasoningBox.Text += r.Substring(shownR); shownR = r.Length; }
             }
         };
         timer.Start();
@@ -415,9 +531,28 @@ private async void OnPickGrantFolder(object? sender, RoutedEventArgs e)
         {
             await Task.Run(async () =>
             {
-                await foreach (var token in _client.AskStreamAsync(url, model, key, context))
+                await foreach (var chunk in _client.AskStreamAsync(url, model, key, context, CurrentLlmParams()))
                 {
-                    lock (gate) buffer.Append(token);
+                    lock (gate)
+                    {
+                        if (chunk.Kind == LlmChunkKind.Thinking)
+                        {
+                            thinkBuffer.Append(chunk.Text);
+                        }
+                        else
+                        {
+                            var (contentPart, thinkPart) = splitter.Process(chunk.Text);
+                            buffer.Append(contentPart);
+                            if (thinkPart.Length > 0) reasonBuffer.Append(thinkPart);
+                        }
+                    }
+                }
+
+                var (fc, ft) = splitter.Flush();
+                lock (gate)
+                {
+                    buffer.Append(fc);
+                    reasonBuffer.Append(ft);
                 }
             });
         }
@@ -428,6 +563,7 @@ private async void OnPickGrantFolder(object? sender, RoutedEventArgs e)
                 Role = "system",
                 Content = $"[ошибка запроса: {ex.Message}]"
             });
+            AppendLog($"\n[ошибка запроса: {ex.Message}]\n");
         }
         finally
         {
@@ -442,6 +578,12 @@ private async void OnPickGrantFolder(object? sender, RoutedEventArgs e)
             CheckAutoRotate();
             SendButton.IsEnabled = true;
         }
+    }
+
+    /// <summary>Для будущего агентного цикла: пишет вызовы инструментов в окно Tool calls.</summary>
+    public void AppendToolCall(string text)
+    {
+        Dispatcher.UIThread.Post(() => ToolCallBox.Text += text);
     }
 
     private void OnInputKeyDown(object? sender, KeyEventArgs e)
@@ -461,104 +603,102 @@ private async void OnPickGrantFolder(object? sender, RoutedEventArgs e)
     private void OnAutoNewDiaryTokensChanged(object? sender, NumericUpDownValueChangedEventArgs e)
         => _data.AutoNewDiaryTokens = (int)(AutoNewDiaryTokensBox.Value ?? 50000);
 
+    // ===== Пользователи системы =====
+
     private List<SystemUser> _systemUsers = new();
 
-private void LoadSystemUsers()
-{
-    _systemUsers = SystemUser.LoadAll();
-    UserBox.Items.Clear();
-    
-    // сначала обычные пользователи (UID >= 1000)
-    foreach (var u in _systemUsers.Where(u => u.IsRegularUser).OrderBy(u => u.Name))
-        UserBox.Items.Add(u);
-    
-    // потом остальные (системные)
-    foreach (var u in _systemUsers.Where(u => !u.IsRegularUser).OrderBy(u => u.Uid))
-        UserBox.Items.Add(u);
-
-    // выбираем текущего пользователя по умолчанию
-    var current = _systemUsers.FirstOrDefault(u => u.Name == Environment.UserName);
-    if (current != null) UserBox.SelectedItem = current;
-}
-
-private SystemUser? _selectedUser;
-
-private void OnUserChanged(object? sender, SelectionChangedEventArgs e)
-{
-    _selectedUser = UserBox.SelectedItem as SystemUser;
-    if (_selectedUser != null)
+    private void LoadSystemUsers()
     {
-        AppendLog($"Выбран пользователь: {_selectedUser.Name} (UID {_selectedUser.Uid}, дом: {_selectedUser.Home})\n");
-        RefreshAllowedFolders();   // ← добавить
-    }
-}
+        _systemUsers = SystemUser.LoadAll();
+        UserBox.Items.Clear();
 
-private async void OnTestUser(object? sender, RoutedEventArgs e)
-{
-    if (_selectedUser == null) return;
-    var (code, output) = await RunAs.ExecAsync(_selectedUser.Name, null, "whoami && pwd");
-    AppendLog(code == 0 ? $"✓ {output.Trim()}\n" : $"✕ Ошибка {code}: {output}\n");
-}
+        foreach (var u in _systemUsers.Where(u => u.IsRegularUser).OrderBy(u => u.Name))
+            UserBox.Items.Add(u);
 
-private void RefreshAllowedFolders()
-{
-    AllowedFoldersBox.Items.Clear();
-    if (_selectedUser == null) return;
-    if (_data.AllowedFolders.TryGetValue(_selectedUser.Name, out var folders))
-        foreach (var f in folders)
-            AllowedFoldersBox.Items.Add(f);
-}
+        foreach (var u in _systemUsers.Where(u => !u.IsRegularUser).OrderBy(u => u.Uid))
+            UserBox.Items.Add(u);
 
-private async void OnGrantFolder(object? sender, RoutedEventArgs e)
-{
-    var path = GrantPathBox.Text?.Trim() ?? "";
-    if (string.IsNullOrWhiteSpace(path) || _selectedUser == null) return;
-
-    if (!Directory.Exists(path))
-    {
-        AppendLog($"⚠ Папка не существует: {path}\n");
-        return;
+        var current = _systemUsers.FirstOrDefault(u => u.Name == Environment.UserName);
+        if (current != null) UserBox.SelectedItem = current;
     }
 
-    // rwX — доступ на чтение/запись/вход; -d — то же для будущих файлов внутри
-    var cmd = $"setfacl -R -m u:{_selectedUser.Name}:rwX \"{path}\" && " +
-              $"setfacl -R -d -m u:{_selectedUser.Name}:rwX \"{path}\"";
-    var (code, output) = await RunAs.ExecAsync(Environment.UserName, null, cmd);
+    private SystemUser? _selectedUser;
 
-    if (code == 0)
+    private void OnUserChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if (!_data.AllowedFolders.TryGetValue(_selectedUser.Name, out var list))
+        _selectedUser = UserBox.SelectedItem as SystemUser;
+        if (_selectedUser != null)
         {
-            list = new List<string>();
-            _data.AllowedFolders[_selectedUser.Name] = list;
+            AppendLog($"Выбран пользователь: {_selectedUser.Name} (UID {_selectedUser.Uid}, дом: {_selectedUser.Home})\n");
+            RefreshAllowedFolders();
         }
-        if (!list.Contains(path)) list.Add(path);
+    }
+
+    private async void OnTestUser(object? sender, RoutedEventArgs e)
+    {
+        if (_selectedUser == null) return;
+        var (code, output) = await RunAs.ExecAsync(_selectedUser.Name, null, "whoami && pwd");
+        AppendLog(code == 0 ? $"✓ {output.Trim()}\n" : $"✕ Ошибка {code}: {output}\n");
+    }
+
+    private void RefreshAllowedFolders()
+    {
+        AllowedFoldersBox.Items.Clear();
+        if (_selectedUser == null) return;
+        if (_data.AllowedFolders.TryGetValue(_selectedUser.Name, out var folders))
+            foreach (var f in folders)
+                AllowedFoldersBox.Items.Add(f);
+    }
+
+    private async void OnGrantFolder(object? sender, RoutedEventArgs e)
+    {
+        var path = GrantPathBox.Text?.Trim() ?? "";
+        if (string.IsNullOrWhiteSpace(path) || _selectedUser == null) return;
+
+        if (!Directory.Exists(path))
+        {
+            AppendLog($"⚠ Папка не существует: {path}\n");
+            return;
+        }
+
+        var cmd = $"setfacl -R -m u:{_selectedUser.Name}:rwX \"{path}\" && " +
+                  $"setfacl -R -d -m u:{_selectedUser.Name}:rwX \"{path}\"";
+        var (code, output) = await RunAs.ExecAsync(Environment.UserName, null, cmd);
+
+        if (code == 0)
+        {
+            if (!_data.AllowedFolders.TryGetValue(_selectedUser.Name, out var list))
+            {
+                list = new List<string>();
+                _data.AllowedFolders[_selectedUser.Name] = list;
+            }
+            if (!list.Contains(path)) list.Add(path);
+            SettingsStore.Save(_data);
+            RefreshAllowedFolders();
+            GrantPathBox.Text = "";
+            AppendLog($"✓ Доступ выдан: {path} → {_selectedUser.Name}\n");
+        }
+        else
+        {
+            AppendLog($"✕ Ошибка выдачи доступа: {output}\n");
+        }
+    }
+
+    private async void OnRevokeFolder(object? sender, RoutedEventArgs e)
+    {
+        var selected = AllowedFoldersBox.SelectedItem as string;
+        if (selected == null || _selectedUser == null) return;
+
+        var cmd = $"setfacl -R -x u:{_selectedUser.Name} \"{selected}\"; " +
+                  $"setfacl -R -d -x u:{_selectedUser.Name} \"{selected}\"";
+        var (code, output) = await RunAs.ExecAsync(Environment.UserName, null, cmd);
+
+        if (_data.AllowedFolders.TryGetValue(_selectedUser.Name, out var list))
+            list.Remove(selected);
         SettingsStore.Save(_data);
         RefreshAllowedFolders();
-        GrantPathBox.Text = "";
-        AppendLog($"✓ Доступ выдан: {path} → {_selectedUser.Name}\n");
+        AppendLog(code == 0
+            ? $"✓ Доступ отозван: {selected}\n"
+            : $"⚠ ACL снят с ошибками: {output}\n");
     }
-    else
-    {
-        AppendLog($"✕ Ошибка выдачи доступа: {output}\n");
-    }
-}
-
-private async void OnRevokeFolder(object? sender, RoutedEventArgs e)
-{
-    var selected = AllowedFoldersBox.SelectedItem as string;
-    if (selected == null || _selectedUser == null) return;
-
-    var cmd = $"setfacl -R -x u:{_selectedUser.Name} \"{selected}\"; " +
-              $"setfacl -R -d -x u:{_selectedUser.Name} \"{selected}\"";
-    var (code, output) = await RunAs.ExecAsync(Environment.UserName, null, cmd);
-
-    if (_data.AllowedFolders.TryGetValue(_selectedUser.Name, out var list))
-        list.Remove(selected);
-    SettingsStore.Save(_data);
-    RefreshAllowedFolders();
-    AppendLog(code == 0
-        ? $"✓ Доступ отозван: {selected}\n"
-        : $"⚠ ACL снят с ошибками: {output}\n");
-}
 }
