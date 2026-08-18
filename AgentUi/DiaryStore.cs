@@ -128,18 +128,32 @@ public static class MemoryStore
 
 public static class ReflectionStore
 {
-    public static string FilePath(string folder, long timestamp) =>
-        Path.Combine(folder, $"reflection_{timestamp}.md");
+    // Оставляем только таймстамп. 
+    // Добавлена защита от перезаписи основного дневника, если сохранение произошло в ту же секунду.
+    public static string FilePath(string folder, long timestamp)
+    {
+        string fileName;
+        do
+        {
+            fileName = $"{timestamp}.md";
+            timestamp++;
+        } while (File.Exists(Path.Combine(folder, fileName)));
+        
+        return Path.Combine(folder, fileName);
+        }
 
     public static List<(string path, string content)> LoadAll(string folder)
-{
-    if (!Directory.Exists(folder)) return new();
+    {
+        if (!Directory.Exists(folder)) return new();
 
-    return Directory.GetFiles(folder, "reflection_*.md")
-        .Select(f => (path: f, content: File.ReadAllText(f)))
-        .Where(r => !string.IsNullOrWhiteSpace(r.content))
-        .ToList();
-}
+        return Directory.GetFiles(folder, "*.md")
+            .Where(f => Path.GetFileName(f) != "working_memory.md")
+            .Select(f => (path: f, content: File.ReadAllText(f)))
+            // КРИТИЧЕСКИЙ ФИЛЬТР: пропускаем основные дневники, чтобы не загрузить их в промпт!
+            // Основные дневники содержат "# История", а сводки дневника — нет.
+            .Where(r => !string.IsNullOrWhiteSpace(r.content) && !r.content.Contains("# История"))
+            .ToList();
+    }
 
     public static void Save(string folder, string content)
     {

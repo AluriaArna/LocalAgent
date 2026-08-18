@@ -36,6 +36,7 @@ public class SettingsData
     public string PromptCharacterPath { get; set; } = "";
     public string PromptAppearancePath { get; set; } = "";
     public string PromptDiarySavePath { get; set; } = "";
+    public string PromptToolsPath { get; set; } = ""; // НОВОЕ ПОЛЕ
     public string RagPath { get; set; } = "";
     public string EmbedModel { get; set; } = "qwen3-embedding:8b";
     public int RagChunkSize { get; set; } = 1000;

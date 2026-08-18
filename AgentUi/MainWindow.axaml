@@ -9,18 +9,11 @@
 
     <Grid ColumnDefinitions="320,*,360">
         <!-- Левая панель: Thinking / Reasoning / Tool calls -->
-        <Grid Grid.Column="0" RowDefinitions="*,*,*" Margin="10,10,0,10">
+        <Grid Grid.Column="0" RowDefinitions="*,*" Margin="10,10,0,10">
             <Grid Grid.Row="0" RowDefinitions="Auto,*" Margin="0,0,10,10">
                 <TextBlock Text="🤔 Thinking" FontWeight="Bold" Margin="0,0,0,5"/>
                 <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                     <TextBox x:Name="ThinkingBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap"/>
-                </ScrollViewer>
-            </Grid>
-
-            <Grid Grid.Row="1" RowDefinitions="Auto,*" Margin="0,0,10,10">
-                <TextBlock Text="🧠 Reasoning" FontWeight="Bold" Margin="0,0,0,5"/>
-                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-                    <TextBox x:Name="ReasoningBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap"/>
                 </ScrollViewer>
             </Grid>
 
@@ -189,6 +182,12 @@
                                 <Grid ColumnDefinitions="*,Auto">
                                     <TextBox Grid.Column="0" x:Name="PromptDiarySaveBox" PlaceholderText="файл не выбран"/>
                                     <Button Grid.Column="1" Content="..." Width="34" Margin="5,0,0,0" Click="OnPickPromptDiarySave"/>
+                                </Grid>
+                                
+                                <TextBlock Text="Инструменты:" Margin="0,0,0,5"/>
+                                <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+                                    <TextBox Grid.Column="0" x:Name="PromptToolsBox" PlaceholderText="файл не выбран"/>
+                                    <Button Grid.Column="1" Content="..." Width="34" Margin="5,0,0,0" Click="OnPickPromptTools"/>
                                 </Grid>
                             </StackPanel>
                         </TabItem>

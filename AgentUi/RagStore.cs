@@ -47,7 +47,6 @@ public static class RagStore
     }
 
     // ===== Построение индекса (инкрементальное) =====
-
     public static async Task<int> BuildAsync(
         LlmClient client, string baseUrl, string? apiKey,
         List<(string path, string source)> sources,
@@ -72,7 +71,7 @@ public static class RagStore
             foreach (var file in files)
             {
                 var lw = File.GetLastWriteTimeUtc(file).Ticks;
-
+                
                 // файл не менялся — переиспользуем старые вектора
                 if (old.TryGetValue(file, out var oldEntry) && oldEntry.LastWrite == lw)
                 {
@@ -81,6 +80,17 @@ public static class RagStore
                 }
 
                 var text = File.ReadAllText(file);
+
+                // КРИТИЧЕСКИЙ ФИЛЬТР:
+                // Мы векторизуем ВСЕ файлы из папки дневника, но пропускаем полные истории.
+                // Полные дневники содержат "# История" и создают мусорные чанки для RAG.
+                // Сводки дневников и working_memory.md этот фильтр проходят и отлично векторизуются.
+                if (text.Contains("# История"))
+                {
+                    log?.Invoke($"[RAG] Пропуск полного дневника (шум для эмбеддинга): {Path.GetFileName(file)}\n");
+                    continue;
+                }
+
                 var chunks = Split(text, chunkSize)
                     .Select(piece => new RagChunk { File = Path.GetFileName(file), Source = source, Text = piece })
                     .ToList();
@@ -91,6 +101,7 @@ public static class RagStore
                     var vectors = await client.EmbedAsync(baseUrl, embedModel, batch.Select(c => c.Text).ToList());
                     for (int j = 0; j < batch.Count && j < vectors.Count; j++)
                         batch[j].Vector = vectors[j];
+                    
                     embedded += batch.Count;
                     log?.Invoke($"{source}: {Path.GetFileName(file)} — фрагментов проэмбеддено: {embedded}\n");
                 }
