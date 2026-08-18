@@ -154,53 +154,58 @@ public partial class MainWindow : Window
             OnNewDiary(this, new RoutedEventArgs());
     }
 
-    private List<ChatMessage> BuildContext()
+private List<ChatMessage> BuildContext()
+{
+    var context = new List<ChatMessage>();
+
+    // Объединяем все system-промпты в один
+    var systemParts = new List<string>();
+
+    var first = LoadPrompt(PromptFirstBox.Text);
+    if (first.Length > 0) systemParts.Add(first);
+
+    var sys = LoadPrompt(PromptSystemBox.Text);
+    if (sys.Length > 0) systemParts.Add(sys);
+
+    var character = LoadPrompt(PromptCharacterBox.Text);
+    if (character.Length > 0) systemParts.Add(character);
+
+    var appearance = LoadPrompt(PromptAppearanceBox.Text);
+    if (appearance.Length > 0) systemParts.Add(appearance);
+
+    if (!string.IsNullOrWhiteSpace(_memory))
+        systemParts.Add("Твоя рабочая память. Всегда учитывай эти пункты при ответах:\n" + _memory);
+
+    if (!string.IsNullOrWhiteSpace(_data.DiaryPath))
     {
-        var context = new List<ChatMessage>();
-
-        var first = LoadPrompt(PromptFirstBox.Text);
-        if (first.Length > 0)
-            context.Add(new ChatMessage { Role = "system", Content = first });
-
-        var sys = LoadPrompt(PromptSystemBox.Text);
-        if (sys.Length > 0)
-            context.Add(new ChatMessage { Role = "system", Content = sys });
-
-        var character = LoadPrompt(PromptCharacterBox.Text);
-        if (character.Length > 0)
-            context.Add(new ChatMessage { Role = "system", Content = character });
-
-        var appearance = LoadPrompt(PromptAppearanceBox.Text);
-        if (appearance.Length > 0)
-            context.Add(new ChatMessage { Role = "system", Content = appearance });
-
-        if (!string.IsNullOrWhiteSpace(_memory))
-            context.Add(new ChatMessage
-            {
-                Role = "system",
-                Content = "Твоя рабочая память. Всегда учитывай эти пункты при ответах:\n" + _memory
-            });
-
-        if (!string.IsNullOrWhiteSpace(_data.DiaryPath))
+        var reflections = ReflectionStore.LoadAll(_data.DiaryPath);
+        if (reflections.Count > 0)
         {
-            var reflections = ReflectionStore.LoadAll(_data.DiaryPath);
-            if (reflections.Count > 0)
-            {
-                context.Add(new ChatMessage
-                {
-                    Role = "system",
-                    Content = "Контекст из предыдущих дневников (рефлексии):\n\n" + string.Join(
-                        "\n\n---\n\n",
-                        reflections.OrderByDescending(r => r.path).Take(3).Select(r => r.content))
-                });
-            }
+            systemParts.Add("Контекст из предыдущих дневников (рефлексии):\n\n" + string.Join(
+                "\n\n---\n\n",
+                reflections.OrderByDescending(r => r.path).Take(3).Select(r => r.content)));
         }
-
-        context.AddRange(_diary.Messages
-            .Skip(Math.Max(0, _diary.Messages.Count - _data.ContextLimit)));
-
-        return context;
     }
+
+    // Добавляем одно объединённое system-сообщение в начало
+    if (systemParts.Count > 0)
+    {
+        context.Add(new ChatMessage 
+        { 
+            Role = "system", 
+            Content = string.Join("\n\n", systemParts) 
+        });
+    }
+
+    // Добавляем историю диалога, но пропускаем system-сообщения
+    var history = _diary.Messages
+        .Skip(Math.Max(0, _diary.Messages.Count - _data.ContextLimit))
+        .Where(m => m.Role != "system");
+    
+    context.AddRange(history);
+
+    return context;
+}
 
     private void RenderLog()
     {
@@ -215,7 +220,7 @@ public partial class MainWindow : Window
         }
         foreach (var m in _diary.Messages)
         {
-            sb.AppendLine($"{(m.Role == "user" ? "Ты" : "Агент")}: {m.Content}");
+            sb.AppendLine($"{(m.Role == "user" ? "Альдраксис" : "Мариса")}: {m.Content}");
             sb.AppendLine();
         }
         LogBox.Text = sb.ToString();
@@ -593,7 +598,7 @@ public partial class MainWindow : Window
             try
             {
                 var historyText = string.Join("\n\n",
-                    _diary.Messages.Select(m => $"{(m.Role == "user" ? "Ты" : "Агент")}: {m.Content}"));
+                    _diary.Messages.Select(m => $"{(m.Role == "user" ? "Альдраксис" : "Мариса")}: {m.Content}"));
 
                 var diaryInstructions = LoadPrompt(PromptDiarySaveBox.Text);
 
@@ -645,7 +650,7 @@ public partial class MainWindow : Window
         try
         {
             var historyText = string.Join("\n",
-                _diary.Messages.Select(m => $"{(m.Role == "user" ? "Ты" : "Агент")}: {m.Content}"));
+                _diary.Messages.Select(m => $"{(m.Role == "user" ? "Альдраксис" : "Мариса")}: {m.Content}"));
 
             var prompt =
                 "Ты — модуль рабочей памяти агента. Из диалога ниже извлеки ключевые пункты, " +
@@ -701,121 +706,136 @@ public partial class MainWindow : Window
 
     // ===== Отправка сообщения (агентный цикл) =====
 
-    private async void OnSendClick(object? sender, RoutedEventArgs e)
+private async void OnSendClick(object? sender, RoutedEventArgs e)
+{
+    var message = InputBox.Text ?? "";
+    if (string.IsNullOrWhiteSpace(message)) return;
+
+    InputBox.Text = "";
+    SendButton.IsEnabled = false;
+
+    var (url, model, key) = GetEndpoint();
+
+    _diary.Messages.Add(new ChatMessage { Role = "user", Content = message });
+    var context = BuildContext();
+
+    var assistantMessage = new ChatMessage { Role = "assistant", Content = "" };
+    _diary.Messages.Add(assistantMessage);
+    RenderLog();
+    AppendLog("Агент: ");
+
+    ThinkingBox.Text = "";
+    ReasoningBox.Text = "";
+    ToolCallBox.Text = "";
+
+    var buffer = new StringBuilder();
+    var thinkBuffer = new StringBuilder();
+    var reasonBuffer = new StringBuilder();
+    var gate = new object();
+    var shownC = 0;
+    var shownT = 0;
+    var shownR = 0;
+    var splitter = new ThinkTagSplitter();
+
+    var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
+    timer.Tick += (_, _) =>
     {
-        var message = InputBox.Text ?? "";
-        if (string.IsNullOrWhiteSpace(message)) return;
-
-        InputBox.Text = "";
-        SendButton.IsEnabled = false;
-
-        var (url, model, key) = GetEndpoint();
-
-        _diary.Messages.Add(new ChatMessage { Role = "user", Content = message });
-        var context = BuildContext();
-
-        var assistantMessage = new ChatMessage { Role = "assistant", Content = "" };
-        _diary.Messages.Add(assistantMessage);
-        RenderLog();
-        AppendLog("Агент: ");
-
-        ThinkingBox.Text = "";
-        ReasoningBox.Text = "";
-        ToolCallBox.Text = "";
-
-        var buffer = new StringBuilder();
-        var thinkBuffer = new StringBuilder();
-        var reasonBuffer = new StringBuilder();
-        var gate = new object();
-        var shownC = 0;
-        var shownT = 0;
-        var shownR = 0;
-        var splitter = new ThinkTagSplitter();
-
-        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
-        timer.Tick += (_, _) =>
+        lock (gate)
         {
-            lock (gate)
-            {
-                var c = buffer.ToString();
-                var t = thinkBuffer.ToString();
-                var r = reasonBuffer.ToString();
-                if (c.Length > shownC) { LogBox.Text += c.Substring(shownC); shownC = c.Length; }
-                if (t.Length > shownT) { ThinkingBox.Text += t.Substring(shownT); shownT = t.Length; }
-                if (r.Length > shownR) { ReasoningBox.Text += r.Substring(shownR); shownR = r.Length; }
-            }
-        };
-        timer.Start();
+            var c = buffer.ToString();
+            var t = thinkBuffer.ToString();
+            var r = reasonBuffer.ToString();
+            if (c.Length > shownC) { LogBox.Text += c.Substring(shownC); shownC = c.Length; }
+            if (t.Length > shownT) { ThinkingBox.Text += t.Substring(shownT); shownT = t.Length; }
+            if (r.Length > shownR) { ReasoningBox.Text += r.Substring(shownR); shownR = r.Length; }
+        }
+    };
+    timer.Start();
 
-        try
+    // Запоминаем, откуда начался последний ответ модели
+    var lastResponseStart = 0;
+
+    try
+    {
+        await Task.Run(async () =>
         {
-            await Task.Run(async () =>
+            var messages = context.ToList();
+            var tools = _ragIndex != null ? RagStore.Tools() : null;
+            const int maxIterations = 5;
+
+            for (int iter = 0; iter < maxIterations; iter++)
             {
-                var messages = context.ToList();
-                var tools = _ragIndex != null ? RagStore.Tools() : null;
-                const int maxIterations = 5;
-
-                for (int iter = 0; iter < maxIterations; iter++)
-                {
-                    var outcome = await _client.AskWithToolsAsync(
-                        url, model, key, messages, CurrentLlmParams(), tools,
-                        chunk =>
-                        {
-                            lock (gate)
-                            {
-                                if (chunk.Kind == LlmChunkKind.Thinking)
-                                {
-                                    thinkBuffer.Append(chunk.Text);
-                                }
-                                else
-                                {
-                                    var (contentPart, thinkPart) = splitter.Process(chunk.Text);
-                                    buffer.Append(contentPart);
-                                    if (thinkPart.Length > 0) reasonBuffer.Append(thinkPart);
-                                }
-                            }
-                        });
-
-                    if (outcome.ToolCalls.Count == 0) break;
-
-                    foreach (var call in outcome.ToolCalls)
+                var outcome = await _client.AskWithToolsAsync(
+                    url, model, key, messages, CurrentLlmParams(), tools,
+                    chunk =>
                     {
-                        var resultText = await ExecuteToolAsync(url, key, call);
-                        messages.Add(new ChatMessage { Role = "tool", Content = resultText });
-                    }
-                }
+                        lock (gate)
+                        {
+                            if (chunk.Kind == LlmChunkKind.Thinking)
+                            {
+                                thinkBuffer.Append(chunk.Text);
+                            }
+                            else
+                            {
+                                var (contentPart, thinkPart) = splitter.Process(chunk.Text);
+                                buffer.Append(contentPart);
+                                if (thinkPart.Length > 0) reasonBuffer.Append(thinkPart);
+                            }
+                        }
+                    });
 
-                var (fc, ft) = splitter.Flush();
+                if (outcome.ToolCalls.Count == 0) break;
+
+                // Перед следующим вызовом запоминаем позицию — это будет началом финального ответа
                 lock (gate)
                 {
-                    buffer.Append(fc);
-                    reasonBuffer.Append(ft);
+                    lastResponseStart = buffer.Length;
                 }
-            });
-        }
-        catch (Exception ex)
-        {
-            _diary.Messages.Add(new ChatMessage
+
+                foreach (var call in outcome.ToolCalls)
+                {
+                    var resultText = await ExecuteToolAsync(url, key, call);
+                    messages.Add(new ChatMessage { Role = "tool", Content = resultText });
+                }
+            }
+
+            var (fc, ft) = splitter.Flush();
+            lock (gate)
             {
-                Role = "system",
-                Content = $"[ошибка запроса: {ex.Message}]"
-            });
-            AppendLog($"\n[ошибка запроса: {ex.Message}]\n");
-        }
-        finally
-        {
-            timer.Stop();
-
-            string finalText;
-            lock (gate) finalText = buffer.ToString();
-
-            assistantMessage.Content = finalText;
-            SaveDiary();
-            RenderLog();
-            CheckAutoRotate();
-            SendButton.IsEnabled = true;
-        }
+                buffer.Append(fc);
+                reasonBuffer.Append(ft);
+            }
+        });
     }
+catch (Exception ex)
+{
+    _diary.Messages.Add(new ChatMessage
+    {
+        Role = "system",
+        Content = $"[ошибка запроса: {ex.Message}]"
+    });
+    AppendLog($"\n[ошибка запроса: {ex.Message}]\n");
+}
+    finally
+    {
+        timer.Stop();
+
+        string finalText;
+        lock (gate)
+        {
+            // Сохраняем в дневник только финальный ответ (после всех tool calls)
+            finalText = buffer.Length > lastResponseStart 
+                ? buffer.ToString().Substring(lastResponseStart) 
+                : buffer.ToString();
+        }
+
+        assistantMessage.Content = finalText;
+        SaveDiary();
+        RenderLog();
+        CheckAutoRotate();
+        SendButton.IsEnabled = true;
+    }
+}
 
     /// <summary>Для будущего агентного цикла: пишет вызовы инструментов в окно Tool calls.</summary>
     public void AppendToolCall(string text)
